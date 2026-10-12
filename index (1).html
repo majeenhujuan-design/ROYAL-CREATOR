@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agence CRM</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f1f6;--panel:#fff;--ink:#1d1830;--mute:#6f6a85;--line:#e4e0ee;--side:#1d1830;--sink:#cfc9e3;--acc:#7a4dff;--ok:#1f9d8b;--bad:#e0446a}
+@media(prefers-color-scheme:dark){:root{--bg:#110e1c;--panel:#1a1629;--ink:#ece8f7;--mute:#9a94b3;--line:#2b2540;--side:#0c0a15;--sink:#a39dbd}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Manrope,system-ui,sans-serif;display:flex;min-height:100vh}
+nav{width:215px;background:var(--side);color:var(--sink);padding:20px 14px;flex-shrink:0;display:flex;flex-direction:column;gap:4px}
+.logo{font-weight:800;font-size:19px;color:#fff;padding:0 10px 4px}.who{font-size:12px;padding:0 10px 12px}
+nav button{all:unset;cursor:pointer;padding:10px 12px;border-radius:8px;font-weight:500}nav button:hover{background:rgba(255,255,255,.08)}
+nav button.on{background:var(--acc);color:#fff;font-weight:700}nav button.adm{border:1px dashed var(--sink)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+main{flex:1;padding:26px 30px;min-width:0}h1{font-size:26px;font-weight:800;margin:0 0 4px}.sub{color:var(--mute);margin:0 0 20px}h2{font-size:16px;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}.grid .card{margin:0}
+.kpi small{color:var(--mute)}.kpi div{font-size:26px;font-weight:800}
+.tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+input,select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.btn{font:inherit;font-weight:700;background:var(--acc);color:#fff;border:0;border-radius:8px;padding:9px 15px;cursor:pointer}
+.btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line);padding:5px 10px;font-weight:500}
+.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:560px}
+th{text-align:left;color:var(--mute);font-weight:500;font-size:13px;padding:8px 10px;border-bottom:1px solid var(--line)}td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.bar{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--ok)}
+.ck{display:flex;gap:8px;align-items:center;padding:3px 0}.mods{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}.mods .card{margin:0}
+.msg{max-width:400px;margin:10vh auto;width:100%;padding:0 16px}.msg input{width:100%;margin-bottom:10px}.err{color:var(--bad);min-height:1.4em}
+@media(max-width:760px){body{flex-direction:column}nav{width:100%;flex-direction:row;overflow-x:auto;padding:10px;align-items:center}.logo,.who{display:none}nav button{white-space:nowrap}main{padding:18px 14px}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+<nav id="nav"></nav>
+<main id="app"></main>
+<script>
+// 1) Remplacez ces deux valeurs (Supabase > Project Settings > API)
+const SB_URL="https://vsjryelosyuenlpqgoij.supabase.co",SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzanJ5ZWxvc3l1ZW5scHFnb2lqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4MjkyNDMsImV4cCI6MjEwNzQwNTI0M30.JuhMNE2RB0rSkgP6UL7XbHvuwlxGa5vB9KlvG3l-mWQ";
+
+const NAMES={dash:"Tableau de bord",models:"Modèles",sales:"Ventes",plan:"Planning",pay:"Retraits",admin:"Admin"};
+const METHODS=["MTN MoMo","Moov Money","Celtiis Cash","Virement bancaire","USDT (TRC-20)","USDT (BEP-20)","USDT (Solana)","USDC (Solana)","USDC (ERC-20)","Ethereum (ETH)","Bitcoin (BTC)"];
+const isCrypto=m=>/USDT|USDC|Bitcoin|Ethereum/.test(m);
+const DEVISE="FCFA"; // devise unique de l'agence : saisissez toutes les ventes dans cette devise
+const ROLES=["Aucun","Manager","Chatteur senior","Chatteur","Modérateur"];
+const PAGES={Manager:["models","sales","plan","pay"],"Chatteur senior":["sales","plan","pay"],Chatteur:["sales","plan","pay"],Modérateur:["plan"],Aucun:[]};
+const TYPES=["Abonnement","Pourboire","Message payant","Contenu personnalisé"],SHIFTS=["Matin","Après-midi","Nuit"];
+const CK=["Contrat signé","Identité (18+) vérifiée","Compte créé","Stratégie de contenu définie","Paiement configuré"];
+const $=i=>document.getElementById(i),sb=window.supabase.createClient(SB_URL,SB_KEY);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const eur=n=>n.toLocaleString("fr-FR",{maximumFractionDigits:2})+" "+DEVISE;
+const opt=(a,s)=>a.map(x=>`<option ${x==s?"selected":""}>${x}</option>`).join("");
+const idOpt=(a,s,k="nom")=>a.map(x=>`<option value="${x.id}" ${x.id==s?"selected":""}>${esc(x[k])}</option>`).join("");
+let me,view,err="",D={prof:[],models:[],asg:[],sales:[],mt:[],st:[],set:[],pay:[],bal:0};
+const mName=id=>(D.models.find(m=>m.id==id)||{nom:"—"}).nom,pName=id=>(D.prof.find(p=>p.id==id)||{name:"—"}).name;
+const plat=()=>(D.set.find(s=>s.key=="plat")||{value:20}).value;
+const mp=id=>(D.mt.find(t=>t.model_id==id)||{pct:50}).pct,sp=id=>(D.st.find(t=>t.user_id==id)||{pct:0}).pct;
+function calc(s){const net=s.amt*(1-plat()/100),ag=net*mp(s.model_id)/100,com=net*sp(s.user_id)/100;return{brut:+s.amt,net,model:net-ag,com,ag:ag-com}}
+const tot=l=>l.map(calc).reduce((t,x)=>({brut:t.brut+x.brut,net:t.net+x.net,model:t.model+x.model,com:t.com+x.com,ag:t.ag+x.ag}),{brut:0,net:0,model:0,com:0,ag:0});
+
+async function load(){
+ const q=t=>sb.from(t).select("*").then(r=>r.data||[]);
+ [D.prof,D.models,D.asg,D.sales,D.pay]=await Promise.all(["profiles","models","assignments","sales","payouts"].map(q));
+ D.bal=(await sb.rpc("my_balance")).data||0;
+ me=D.prof.find(p=>p.id==me.id)||me;
+ if(me.is_admin)[D.mt,D.st,D.set]=await Promise.all(["model_terms","staff_terms","settings"].map(q));
+ render()}
+async function run(fn){err="";try{const r=await fn();if(r&&r.error)err=/row-level security/.test(r.error.message)?"Action refusée : montant supérieur à votre solde, ou accès non autorisé.":r.error.message}catch(e){err=e.message}await load()}
+
+const V={
+dash(){const t=tot(D.sales);return `<h1>Tableau de bord</h1><p class="sub">Frais de plateforme : ${plat()} %. La commission des chatteurs est prélevée sur la part de l'agence.</p>
+<div class="grid">${[["Ventes brutes",t.brut],["Net après plateforme",t.net],["Part des modèles",t.model],["Commissions chatteurs",t.com],["Bénéfice agence",t.ag]].map(([l,v])=>`<div class="card kpi"><small>${l}</small><div>${eur(v)}</div></div>`).join("")}</div>
+<div class="card scroll"><h2>Par chatteur</h2><table><tr><th>Chatteur</th><th>Rôle</th><th>Ventes</th><th>Commission</th></tr>${D.prof.filter(p=>p.role!="Aucun").map(p=>{const x=tot(D.sales.filter(s=>s.user_id==p.id));return `<tr><td>${esc(p.name)}</td><td>${p.role}</td><td>${eur(x.brut)}</td><td>${eur(x.com)}</td></tr>`}).join("")||`<tr><td colspan="4">Aucun membre actif.</td></tr>`}</table></div>
+<div class="card scroll"><h2>Par modèle</h2><table><tr><th>Modèle</th><th>Ventes</th><th>Part modèle</th><th>Bénéfice agence</th></tr>${D.models.map(m=>{const x=tot(D.sales.filter(s=>s.model_id==m.id));return `<tr><td>${esc(m.nom)}</td><td>${eur(x.brut)}</td><td>${eur(x.model)}</td><td>${eur(x.ag)}</td></tr>`}).join("")||`<tr><td colspan="4">Aucune modèle.</td></tr>`}</table></div>`},
+models(){const A=me.is_admin;return `<h1>Modèles</h1><p class="sub">${A?"Intégrez une modèle et suivez son onboarding.":"Les modèles auxquelles vous avez accès."}</p>
+${A?`<div class="tools"><input id="a-nom" placeholder="Nom"><input id="a-ps" placeholder="Pseudo (@...)"><input id="a-pct" type="number" min="0" max="100" value="50" title="Part agence %"><button class="btn" data-a="addModel">Ajouter la modèle</button></div>`:""}
+<div class="mods">${D.models.map(m=>{const c=m.ck||[0,0,0,0,0],n=c.filter(Boolean).length;return `<div class="card"><h2>${esc(m.nom)} <small style="color:var(--mute);font-weight:400">${esc(m.pseudo)}</small></h2>
+${A?`<div>Part agence <input type="number" style="width:70px" data-mp="${m.id}" value="${mp(m.id)}"> %</div>`:""}
+<div class="bar"><i style="width:${n/5*100}%"></i></div><small>Onboarding : ${n}/5</small>
+${CK.map((l,i)=>`<label class="ck"><input type="checkbox" ${A?`data-ck="${m.id}:${i}"`:"disabled"} ${c[i]?"checked":""}> ${l}</label>`).join("")}
+${A?`<p><button class="btn alt" data-a="delModel" data-i="${m.id}">Supprimer</button></p>`:""}</div>`}).join("")||"<p>Aucune modèle disponible.</p>"}</div>`},
+sales(){const A=me.is_admin,l=[...D.sales].sort((a,b)=>b.d.localeCompare(a.d));
+const mine=A?D.models:D.models.filter(m=>D.asg.some(a=>a.user_id==me.id&&a.model_id==m.id));
+return `<h1>Ventes</h1><p class="sub">${A?"Toutes les ventes, avec la répartition des parts.":"Vos ventes. Vous ne pouvez saisir que pour vos modèles attribuées."}</p>
+${mine.length?`<div class="tools"><input id="a-d" type="date" value="${new Date().toISOString().slice(0,10)}"><select id="a-mid">${idOpt(mine)}</select>
+${A?`<select id="a-cid">${idOpt(D.prof.filter(p=>p.role!="Aucun"),null,"name")}</select>`:""}<select id="a-type">${opt(TYPES)}</select><input id="a-amt" type="number" min="0" placeholder="Montant"><button class="btn" data-a="addSale">Enregistrer la vente</button></div>`:`<div class="card">Aucune modèle ne vous est attribuée. Contactez un administrateur.</div>`}
+<div class="card scroll"><table><tr><th>Date</th><th>Modèle</th><th>Chatteur</th><th>Type</th><th>Brut</th>${A?"<th>Part modèle</th><th>Commission</th><th>Agence</th><th></th>":""}</tr>
+${l.map(s=>{const x=calc(s);return `<tr><td>${s.d}</td><td>${esc(mName(s.model_id))}</td><td>${esc(pName(s.user_id))}</td><td>${esc(s.type)}</td><td>${eur(+s.amt)}</td>${A?`<td>${eur(x.model)}</td><td>${eur(x.com)}</td><td>${eur(x.ag)}</td><td><button class="btn alt" data-a="delSale" data-i="${s.id}">×</button></td>`:""}</tr>`}).join("")||`<tr><td colspan="9">Aucune vente enregistrée.</td></tr>`}</table></div>`},
+plan(){const l=D.asg;return `<h1>Planning</h1><p class="sub">${me.is_admin||me.role=="Manager"?"Qui couvre quelle modèle, et sur quel shift.":"Vos shifts attribués."}</p><div class="grid">
+${SHIFTS.map(sh=>`<div class="card"><h2>${sh}</h2>${l.filter(a=>a.shift==sh).map(a=>`<div>${esc(pName(a.user_id))}<br><small style="color:var(--mute)">Modèle : ${esc(mName(a.model_id))}</small></div>`).join("<hr style='border:0;border-top:1px solid var(--line)'>")||"<small>Aucun shift.</small>"}</div>`).join("")}</div>`},
+pay(){const A=me.is_admin,st=["En attente","Payé","Refusé"];
+if(A)return `<h1>Retraits</h1><p class="sub">Payez la personne sur le numéro indiqué, puis passez la demande en « Payé » et notez la référence de la transaction.</p>
+<div class="card scroll"><table><tr><th>Date</th><th>Personne</th><th>Montant</th><th>Moyen</th><th>Numéro / compte / adresse</th><th>Statut</th><th>Référence</th></tr>
+${D.pay.map(p=>`<tr><td>${p.created_at.slice(0,10)}</td><td>${esc(pName(p.user_id))}</td><td>${eur(+p.amt)}</td><td>${esc(p.method)}</td><td>${esc(p.phone)}</td><td><select data-py="${p.id}:status">${opt(st,p.status)}</select></td><td><input style="width:150px" data-py="${p.id}:ref" value="${esc(p.ref)}" placeholder="Réf. ou hash de transaction"></td></tr>`).join("")||`<tr><td colspan="7">Aucune demande de retrait.</td></tr>`}</table></div>`;
+return `<h1>Retraits</h1><p class="sub">Retirez vos commissions sur votre compte mobile money ou bancaire.</p>
+<p class="sub">Crypto : vérifiez bien le réseau (TRC-20, BEP-20, Solana, ERC-20, Ethereum, Bitcoin) et l'adresse. Un envoi vers une mauvaise adresse ou un mauvais réseau est irréversible. Le montant en crypto est converti au cours du jour du paiement.</p>
+<div class="grid"><div class="card kpi"><small>Solde disponible</small><div>${eur(+D.bal)}</div></div></div>
+<div class="tools"><input id="p-amt" type="number" min="1" placeholder="Montant à retirer"><select id="p-m">${opt(METHODS)}</select><input id="p-n" placeholder="N° mobile money, IBAN ou adresse du portefeuille"><button class="btn" data-a="reqPay">Demander le retrait</button></div>
+<div class="card scroll"><table><tr><th>Date</th><th>Montant</th><th>Moyen</th><th>Statut</th><th>Référence</th></tr>
+${D.pay.map(p=>`<tr><td>${p.created_at.slice(0,10)}</td><td>${eur(+p.amt)}</td><td>${esc(p.method)}</td><td>${esc(p.status)}</td><td>${esc(p.ref)}</td></tr>`).join("")||`<tr><td colspan="5">Aucune demande pour l'instant.</td></tr>`}</table></div>`},
+admin(){return `<h1>Admin</h1><p class="sub">Espace réservé aux administrateurs. Un nouveau compte n'a aucun accès tant que vous ne lui donnez pas de rôle.</p>
+<div class="card scroll"><h2>Équipe et accès</h2><table><tr><th>Nom</th><th>Rôle</th><th>Admin</th><th>Commission %</th></tr>
+${D.prof.map(p=>`<tr><td><b>${esc(p.name)}</b></td><td><select data-pr="${p.id}:role">${opt(ROLES,p.role)}</select></td>
+<td><input type="checkbox" data-pr="${p.id}:is_admin" ${p.is_admin?"checked":""} ${p.id==me.id?"disabled":""}></td>
+<td><input type="number" style="width:70px" data-sp="${p.id}" value="${sp(p.id)}"></td></tr>`).join("")}</table></div>
+<div class="card"><h2>Attribuer une modèle et un shift</h2><div class="tools"><select id="s-u">${idOpt(D.prof.filter(p=>p.role!="Aucun"),null,"name")}</select><select id="s-m">${idOpt(D.models)}</select><select id="s-s">${opt(SHIFTS)}</select><button class="btn" data-a="assign">Attribuer</button></div>
+${D.asg.map(a=>`<div class="tools">${esc(pName(a.user_id))} → ${esc(mName(a.model_id))} · ${a.shift}<button class="btn alt" data-a="unassign" data-i="${a.id}">Retirer</button></div>`).join("")||"<small>Aucune attribution.</small>"}</div>
+<div class="card"><h2>Exporter la paie (CSV)</h2><div class="tools"><input id="x-m" type="month" value="${new Date().toISOString().slice(0,7)}"><button class="btn" data-a="payroll">Télécharger</button></div></div>
+<div class="card"><h2>Frais de plateforme (%)</h2><input type="number" min="0" max="100" data-plat value="${plat()}"></div>`}
+};
+
+function render(){
+ const pages=me.is_admin?["dash","models","sales","plan","pay","admin"]:PAGES[me.role]||[];
+ if(!pages.length){$("nav").innerHTML="";$("app").innerHTML=`<div class="msg"><h1>Accès en attente</h1><p class="sub">Votre compte est créé. Un administrateur doit vous attribuer un rôle.</p><button class="btn" data-a="out">Se déconnecter</button></div>`;return}
+ if(!pages.includes(view))view=pages[0];
+ $("nav").innerHTML=`<div class="logo">Agence CRM</div><div class="who">${esc(me.name)} · ${me.is_admin?"Admin":me.role}</div>`+pages.map(p=>`<button data-v="${p}" class="${p==view?"on":""} ${p=="admin"?"adm":""}">${NAMES[p]}</button>`).join("")+`<button data-a="out" style="margin-top:auto">Déconnexion</button>`;
+ $("app").innerHTML=V[view]()+`<p class="err">${esc(err)}</p>`}
+
+function authScreen(msg=""){$("nav").innerHTML="";$("app").innerHTML=`<div class="msg"><h1>Agence CRM</h1><p class="sub">Connectez-vous ou créez votre compte.</p>
+<input id="u-name" placeholder="Nom (pour créer un compte)"><input id="u-mail" type="email" placeholder="E-mail"><input id="u-pw" type="password" placeholder="Mot de passe (8 caractères minimum)">
+<div class="tools"><button class="btn" data-a="in">Se connecter</button><button class="btn alt" data-a="up">Créer un compte</button><button class="btn alt" data-a="forgot">Mot de passe oublié</button></div><p class="err">${esc(msg)}</p></div>`}
+const val=i=>$(i)&&$(i).value;
+function recoveryScreen(msg=""){$("nav").innerHTML="";$("app").innerHTML=`<div class="msg"><h1>Nouveau mot de passe</h1><input id="u-pw" type="password" placeholder="Nouveau mot de passe (8 caractères minimum)"><button class="btn" data-a="setpw">Enregistrer</button><p class="err">${esc(msg)}</p></div>`}
+sb.auth.onAuthStateChange(ev=>{if(ev=="PASSWORD_RECOVERY")recoveryScreen()});
+document.addEventListener("click",async e=>{
+ const v=e.target.closest("[data-v]");if(v){view=v.dataset.v;err="";return render()}
+ const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,i=b.dataset.i;
+ if(a=="in"||a=="up"){const c={email:val("u-mail"),password:val("u-pw")};
+  const r=a=="in"?await sb.auth.signInWithPassword(c):await sb.auth.signUp({...c,options:{data:{name:val("u-name")}}});
+  if(r.error)return authScreen(r.error.message);if(!r.data.session)return authScreen("Compte créé. Confirmez votre e-mail puis connectez-vous.");return start(r.data.session.user)}
+ if(a=="forgot"){const m=val("u-mail");if(!m)return authScreen("Saisissez votre e-mail dans le champ ci-dessus.");
+  await sb.auth.resetPasswordForEmail(m,{redirectTo:location.origin+location.pathname});return authScreen("Si ce compte existe, un e-mail de réinitialisation vient d'être envoyé.")}
+ if(a=="setpw"){const r=await sb.auth.updateUser({password:val("u-pw")});if(r.error)return recoveryScreen(r.error.message);return start(r.data.user)}
+ if(a=="payroll"){const m=val("x-m"),rows=[["Chatteur","Rôle","Ventes brutes","Commission"]];
+  D.prof.filter(p=>p.role!="Aucun").forEach(p=>{const x=tot(D.sales.filter(s=>s.user_id==p.id&&s.d.startsWith(m)));rows.push([p.name,p.role,x.brut.toFixed(2),x.com.toFixed(2)])});
+  const csv="\ufeff"+rows.map(r=>r.map(c=>'"'+String(c).replace(/^[=+\-@]/,"'$&").replace(/"/g,'""')+'"').join(";")).join("\n");
+  const l=document.createElement("a");l.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));l.download="paie-"+m+".csv";l.click();return}
+ if(a=="reqPay"){const amt=+val("p-amt"),n=val("p-n").trim();if(!amt||!n)return;if(isCrypto(val("p-m"))&&n.length<26){err="Adresse de portefeuille trop courte : vérifiez-la.";return render()}run(()=>sb.from("payouts").insert({user_id:me.id,amt,method:val("p-m"),phone:n}))}
+ if(a=="out"){await sb.auth.signOut();return authScreen()}
+ if(a=="addModel"){const n=val("a-nom").trim();if(!n)return;run(async()=>{const r=await sb.from("models").insert({nom:n,pseudo:val("a-ps")||"@"}).select().single();if(r.error)return r;return sb.from("model_terms").insert({model_id:r.data.id,pct:+val("a-pct")})})}
+ if(a=="delModel")run(()=>sb.from("models").delete().eq("id",i));
+ if(a=="addSale"){const amt=+val("a-amt");if(!amt)return;run(()=>sb.from("sales").insert({d:val("a-d"),model_id:val("a-mid"),user_id:me.is_admin?val("a-cid"):me.id,amt,type:val("a-type")}))}
+ if(a=="delSale")run(()=>sb.from("sales").delete().eq("id",i));
+ if(a=="assign"){if(!val("s-u")||!val("s-m"))return;run(()=>sb.from("assignments").insert({user_id:val("s-u"),model_id:val("s-m"),shift:val("s-s")}))}
+ if(a=="unassign")run(()=>sb.from("assignments").delete().eq("id",i));
+});
+document.addEventListener("change",e=>{const t=e.target,d=t.dataset;
+ if(d.ck){const[i,k]=d.ck.split(":"),c=[...(D.models.find(m=>m.id==i).ck||[0,0,0,0,0])];c[k]=t.checked?1:0;run(()=>sb.from("models").update({ck:c}).eq("id",i))}
+ if(d.pr){const[i,f]=d.pr.split(":");run(()=>sb.from("profiles").update({[f]:f=="is_admin"?t.checked:t.value}).eq("id",i))}
+ if(d.mp)run(()=>sb.from("model_terms").upsert({model_id:d.mp,pct:Math.max(0,Math.min(100,+t.value||0))}));
+ if(d.sp)run(()=>sb.from("staff_terms").upsert({user_id:d.sp,pct:Math.max(0,Math.min(100,+t.value||0))}));
+ if(d.py){const[i,f]=d.py.split(":");run(()=>sb.from("payouts").update({[f]:t.value}).eq("id",i))}
+ if(t.hasAttribute("data-plat"))run(()=>sb.from("settings").upsert({key:"plat",value:Math.max(0,Math.min(100,+t.value||0))}));
+});
+async function start(u){me={id:u.id};const r=await sb.from("profiles").select("*").eq("id",u.id).single();if(r.error)return authScreen("Profil introuvable. Vérifiez que schema.sql a été exécuté.");me=r.data;await load()}
+(async()=>{if(location.hash.includes("type=recovery"))return;if(SB_URL.includes("VOTRE"))return $("app").innerHTML=`<div class="msg"><h1>Configuration requise</h1><p class="sub">Renseignez SB_URL et SB_KEY au début du script de index.html.</p></div>`;
+ const{data}=await sb.auth.getSession();data.session?start(data.session.user):authScreen()})();
+</script>
+</body>
+</html>
